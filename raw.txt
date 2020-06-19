@@ -1,0 +1,874 @@
+#include <math.h>
+#include <iostream>
+#include <GL/glew.h>
+#include <GL/glut.h>
+#include <GL/GLU.h>
+#include <GLFW/glfw3.h>
+#include <GL/glu.h>
+#include <soil.h>
+#include <string>
+#include <fstream>
+#include <vector>
+
+
+// angle of rotation for the camera direction
+float angle = -91.5; //Перегляд кубу
+float VerticalAngle = 1.0f;
+// actual vector representing the camera's direction
+float lx = 0.4f, lz = 1.0f; //Розташування камери
+// XZ position of the camera
+float x = -0.4f, z = -1.0f, y = 2.0f;
+float sizeofcube = 0.8f;
+float YAngle = 0.0f;
+float deltaAngle = 0.0f;
+int xOrigin = -1;
+int yOrigin = -1;
+float ly = 0.0f;
+int Turns = 0;
+
+void selectColor(int id) {
+	switch (id) { //Колір
+		case 1: glColor3f(0.0, 0.0, 0.0); break; //Чорний
+		case 2: glColor3f(0.0, 0.0, 1.0); break; //Синій
+		case 3: glColor3f(1.0, 0.0, 0.0); break; //Червоний
+		case 4: glColor3f(0.0, 1.0, 0.0); break; //Зелений
+		case 5: glColor3f(1.0, 1.0, 1.0); break; //Білий
+		case 6: glColor3f(1.0, 1.0, 0.0); break; //Жовтий
+	}
+}
+
+class Сube {
+public:
+	float cubeX, cubeY, cubeZ;
+	int color1 = 1; int color2 = 2;
+	int color3 = 3; int color4 = 4;
+	int color5 = 5; int color6 = 6;
+	
+void MakeACube(float x, float y, float z) {
+		cubeX = x; cubeY = y; cubeZ = z;
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		//glTranslatef(0, dimY / 2, 0);
+
+		//glScalef(dimX / 2, dimY / 2, dimZ / 2);
+
+		glBegin(GL_QUADS);
+
+		selectColor(color1);
+		glVertex3f(x, y, z);
+		glVertex3f(x + sizeofcube, y, z);
+		glVertex3f(x + sizeofcube, y, z + sizeofcube);
+		glVertex3f(x, y, z + sizeofcube);
+
+		selectColor(color2);
+		glVertex3f(x, y + sizeofcube, z);
+		glVertex3f(x + sizeofcube, y + sizeofcube, z);
+		glVertex3f(x + sizeofcube, y + sizeofcube, z + sizeofcube);
+		glVertex3f(x, y + sizeofcube, z + sizeofcube);
+
+		selectColor(color3);
+		glVertex3f(x, y, z + sizeofcube);
+		glVertex3f(x + sizeofcube, y, z + sizeofcube);
+		glVertex3f(x + sizeofcube, y + sizeofcube, z + sizeofcube);
+		glVertex3f(x, y + sizeofcube, z + sizeofcube);
+
+		selectColor(color4);
+		glVertex3f(x, y, z);
+		glVertex3f(x, y, z + sizeofcube);
+		glVertex3f(x, y + sizeofcube, z + sizeofcube);
+		glVertex3f(x, y + sizeofcube, z);
+
+		selectColor(color5);
+		glVertex3f(x + sizeofcube, y, z);
+		glVertex3f(x + sizeofcube, y, z + sizeofcube);
+		glVertex3f(x + sizeofcube, y + sizeofcube, z + sizeofcube);
+		glVertex3f(x + sizeofcube, y + sizeofcube, z);
+
+		selectColor(color6);
+		glVertex3f(x + sizeofcube, y + sizeofcube, z);
+		glVertex3f(x, y + sizeofcube, z);
+		glVertex3f(x, y, z);
+		glVertex3f(x + sizeofcube, y, z);
+
+		glEnd();
+
+		glPopMatrix();
+	}
+};
+
+class ShaderUtil {
+	private:
+	unsigned int mProgramId;
+	GLuint r_mod;
+
+	unsigned int GetCompiledShader(unsigned int shader_type, const std::string& shader_source) {
+		unsigned int shader_id = glCreateShader(shader_type);
+
+		const char* c_source = shader_source.c_str();
+		glShaderSource(shader_id, 1, &c_source, nullptr);
+		glCompileShader(shader_id);
+
+		GLint result;
+		glGetShaderiv(shader_id, GL_COMPILE_STATUS, &result);
+
+		if (result == GL_FALSE) {
+			std::cout << "Compile shader error" << std::endl;
+			int length;
+			glGetShaderiv(shader_id, GL_INFO_LOG_LENGTH, &length);
+
+			GLchar* strInfoLog = new GLchar[length + 1];
+			glGetShaderInfoLog(shader_id, length, &length, strInfoLog);
+
+			fprintf(stderr, "Compilation error in shader: %s\n", strInfoLog);
+			delete[] strInfoLog;
+		}
+
+		return shader_id;
+	}
+
+	public:
+	ShaderUtil() {}
+	~ShaderUtil() {}
+
+	// Load a vertex and a fragment shader from file
+	bool load() {
+		
+		const char* f_fs =
+			"in vec3 ourColor;"
+			"out vec4 FragColor;"
+			"void main() {"
+			"	FragColor = vec4(ourColor, 1.0f);"
+			"}";
+		const char* f_vs =
+			"layout(location = 0) in vec3 aPos;"
+			"layout(location = 1) in vec3 aColor;"
+			"out vec3 ourColor;"
+			"void main() {"
+			"	gl_Position = vec4(aPos, 1.0);"
+			" ourColor = aColor;"
+			"}";
+
+		unsigned int vs = GetCompiledShader(GL_VERTEX_SHADER, f_vs);
+		unsigned int fs = GetCompiledShader(GL_FRAGMENT_SHADER, f_fs);
+
+		if (vs && fs) {
+			mProgramId = glCreateProgram();
+
+			glAttachShader(mProgramId, vs);
+			glAttachShader(mProgramId, fs);
+
+			glLinkProgram(mProgramId);
+
+			//int linked = 0;
+			//glGetProgramiv(mProgramId, GL_LINK_STATUS, &linked);
+			//
+			//if (linked == GL_FALSE) {
+			//	std::cout << "Shader error" << std::endl;
+			//	int length = 0;
+			//	glGetProgramiv(mProgramId, GL_INFO_LOG_LENGTH, &length);
+			//
+			//	std::vector<char> info(length);
+			//	glGetProgramInfoLog(mProgramId, length, &length, info.data());
+			//
+			//	std::cout << std::string(info.begin(), info.end()) << std::endl;
+			//
+			//	glDeleteShader(vs);
+			//	glDeleteShader(fs);
+			//
+			//	return false;
+			//}
+			//r_mod = glGetUniformLocation(mProgramId, "r_mod");
+
+			//glDetachShader(mProgramId, vs);
+			//glDetachShader(mProgramId, fs);
+
+			return true;
+		}
+		std::cout << "Shader error" << std::endl;
+		return false;
+	}
+
+	bool load(const std::string& vertexShaderFile, const std::string& fragmentShaderFile) {
+		std::ifstream is_vs(vertexShaderFile);
+		const std::string f_vs((std::istreambuf_iterator<char>(is_vs)), std::istreambuf_iterator<char>());
+
+		std::ifstream is_fs(fragmentShaderFile);
+		const std::string f_fs((std::istreambuf_iterator<char>(is_fs)), std::istreambuf_iterator<char>());
+
+		unsigned int vs = GetCompiledShader(GL_VERTEX_SHADER, f_vs);
+		unsigned int fs = GetCompiledShader(GL_FRAGMENT_SHADER, f_fs);
+
+		if (vs && fs) {
+			mProgramId = glCreateProgram();
+
+			glAttachShader(mProgramId, vs);
+			glAttachShader(mProgramId, fs);
+
+			glLinkProgram(mProgramId);
+
+			//int linked = 0;
+			//glGetProgramiv(mProgramId, GL_LINK_STATUS, &linked);
+			//
+			//if (linked == GL_FALSE) {
+			//	std::cout << "Shader error" << std::endl;
+			//	int length = 0;
+			//	glGetProgramiv(mProgramId, GL_INFO_LOG_LENGTH, &length);
+			//
+			//	std::vector<char> info(length);
+			//	glGetProgramInfoLog(mProgramId, length, &length, info.data());
+			//
+			//	std::cout << std::string(info.begin(), info.end()) << std::endl;
+			//
+			//	glDeleteShader(vs);
+			//	glDeleteShader(fs);
+			//
+			//	return false;
+			//}
+			//r_mod = glGetUniformLocation(mProgramId, "r_mod");
+
+			//glDetachShader(mProgramId, vs);
+			//glDetachShader(mProgramId, fs);
+
+			return true;
+		}
+
+		std::cout << "Shader error" << std::endl;
+		return false;
+	}
+
+	// Use the program
+	void init() {
+		glUseProgram(mProgramId);
+	}
+
+	// Delete the program
+	void destroy() {
+		glDeleteProgram(mProgramId);
+	}
+};
+
+//Сube TestCube[3][3][3];
+Сube TestCube;
+ShaderUtil shaderUtil;
+
+GLuint texture;
+GLUquadric* MySphereSkyBox;
+
+void mouseButton(int button, int state, int x, int y) {
+	// only start motion if the left button is pressed
+	if (button == GLUT_LEFT_BUTTON) {
+		// when the button is released
+		if (state == GLUT_UP) {
+			angle += deltaAngle;
+			xOrigin = -1;
+		} else {
+			xOrigin = x;
+		}
+	}
+}
+
+void mouseMove(int x, int y) {
+	// this will only be true when the left button is down
+	if (xOrigin >= 0) {
+		// update deltaAngle
+		deltaAngle = (x - xOrigin) * 0.001f;
+		YAngle = (y - yOrigin) * 0.001f;
+		// update camera's direction
+		lx = sin(angle + deltaAngle);
+		lz = -cos(angle + deltaAngle);
+	}
+}
+
+void SphereTextureMaking() {
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+
+	int width, height;
+	unsigned char* image = SOIL_load_image("skybg2.png", &width, &height, 0, SOIL_LOAD_RGB);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	SOIL_free_image_data(image);
+}
+
+void SpaceBox() {
+	glColor3f(1, 1, 1);
+	SphereTextureMaking();
+	glBindTexture(GL_TEXTURE_2D, texture);
+	gluQuadricDrawStyle(MySphereSkyBox, GLU_FILL);
+	gluQuadricNormals(MySphereSkyBox, GLU_SMOOTH);
+	gluSphere(MySphereSkyBox, 20, 20, 20);
+	gluQuadricTexture(MySphereSkyBox, GLU_TRUE);
+	glDeleteTextures(1, &texture);
+}
+
+
+void display(void) {
+	int i = 0; int j = 0; int k = 0;
+	float axisX = 0.0f; float axisY = 0.8f; float axisZ = 0.8f;
+	float XaxisX = 0.0f; float YaxisY = 0.4f; float ZaxisZ = 0.4f;
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	SpaceBox(); //Текстура простору 
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	gluLookAt(x, y, z, x + lx, y + ly, z + lz, 0.0f, 1.0f, 0.0f);
+
+	/*for (k=0; k<3;k++) { 
+		axisZ += 0.45f;
+		axisX = 0.0f;
+		axisY = 0.4f;
+		for (i=0;i < 3; i++) {
+			axisY += 0.45f;
+			if (i == 2) axisY = YaxisY;
+			for (j = 0; j < 3; j++) {
+				axisX += 0.45f;
+				TestCube[i][j][k].MakeACube(axisX, axisY, axisZ);
+				if (j==2) axisX = XaxisX;
+			}
+		}
+	}*/
+
+	TestCube.MakeACube(1.0, 1.0, 1.0);
+
+	glFlush();
+
+	glutSwapBuffers();
+}
+
+
+void init(void) {
+	glClearColor(0, 0, 0, 0);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glFrustum(-1, 1, -1, 1, 1, 1000);
+
+	glEnable(GL_TEXTURE_2D);
+	glEnable(GL_DEPTH_TEST);
+}
+
+
+void handleKeys(int key, int xx, int yy) {
+	int color1T, color2T, color3T, color4T, color5T, color6T, color7T, color8T, color9T, color10T, color11T, color12T;
+	float fraction = 0.3f;
+	int i = 0; int j = 0;
+
+	switch (key) {
+		case GLUT_KEY_LEFT: { //Поворот камери ліворуч 
+			angle -= 0.05f;
+			lx = sin(angle);
+			lz = -cos(angle);
+			break; 
+		}
+		case GLUT_KEY_RIGHT: { //Поворот камери праворуч 
+			angle += 0.05f;
+			lx = sin(angle);
+			lz = -cos(angle);
+			break; 
+		}
+		case GLUT_KEY_UP: { //Рух камери вперед
+			x += lx * fraction;
+			z += lz * fraction;
+			break; 
+		}
+		case GLUT_KEY_DOWN: { //Рух камери назад
+			x -= lx * fraction;
+			z -= lz * fraction;
+			break; 
+		}
+		case GLUT_KEY_PAGE_UP: { //Рух камери вгору
+			y = y + 0.1; 
+			break; 
+		}
+		case GLUT_KEY_PAGE_DOWN: { //Рух камери донизу
+			y = y - 0.1; 
+			break; 
+		}
+		case GLUT_KEY_F1: { //Перший ряд <-
+			Turns += 1;
+			color1T = TestCube.color6; //Жовтий 
+		
+			color2T = TestCube.color5; //Білий 
+		
+			color3T = TestCube.color3; //Червоний 
+		
+			color4T = TestCube.color4; //Зелений 
+				
+			TestCube.color5 = color1T; //Жовтий 
+		
+			TestCube.color3 = color2T; //Білий 
+		
+			TestCube.color4 = color3T; //Червоний
+		
+			TestCube.color6 = color4T; //Зелений 
+			break; 
+		}
+		
+		case GLUT_KEY_F2: { //Перший стовпчик ^
+			Turns += 1;
+			color1T = TestCube.color3; //Червоний 
+			
+			color2T = TestCube.color1; //Чорний 
+		
+			color3T = TestCube.color6; //Жовтий 
+			
+			color4T = TestCube.color2; //Синій  
+			
+			TestCube.color3 = color4T; //Синій
+			
+			TestCube.color1 = color1T;	 //Червоний 
+			
+			TestCube.color6 = color2T;	 //Чорний 
+			
+			TestCube.color2 = color3T;	 //Жовтий  
+			break; 
+		}
+
+		//case GLUT_KEY_F1: { //Перший ряд <-
+		//	Turns += 1;
+		//	color1T = TestCube[1][0][0].color6; //Жовтий 
+		//	color2T = TestCube[1][1][0].color6;
+		//	color3T = TestCube[1][2][0].color6;
+		//
+		//	color4T = TestCube[1][2][0].color5; //Білий 
+		//	color5T = TestCube[1][2][1].color5;
+		//	color6T = TestCube[1][2][2].color5;
+		//
+		//	color7T = TestCube[1][0][2].color3; //Червоний 
+		//	color8T = TestCube[1][1][2].color3;
+		//	color9T = TestCube[1][2][2].color3;
+		//
+		//	color10T = TestCube[1][0][0].color4; //Зелений 
+		//	color11T = TestCube[1][0][1].color4;
+		//	color12T = TestCube[1][0][2].color4;
+		//		
+		//	TestCube[1][2][0].color5 = color1T; //Жовтий 
+		//	TestCube[1][2][1].color5 = color2T;
+		//	TestCube[1][2][2].color5 = color3T;
+		//
+		//	TestCube[1][2][2].color3 = color4T; //Білий 
+		//	TestCube[1][1][2].color3 = color5T;
+		//	TestCube[1][0][2].color3 = color6T;
+		//
+		//	TestCube[1][0][2].color4 = color9T; //Червоний 
+		//	TestCube[1][0][1].color4 = color8T;
+		//	TestCube[1][0][0].color4 = color7T;
+		//
+		//	TestCube[1][0][0].color6 = color12T; //Зелений 
+		//	TestCube[1][1][0].color6 = color11T;
+		//	TestCube[1][2][0].color6 = color10T;
+		//	break; 
+		//}
+		//
+		//case GLUT_KEY_F2: { //Другий ряд <-
+		//	Turns += 1;
+		//	color1T = TestCube[0][0][0].color6; //Жовтий 
+		//	color2T = TestCube[0][1][0].color6;
+		//	color3T = TestCube[0][2][0].color6;
+		//
+		//	color4T = TestCube[0][2][0].color5; //Білий 
+		//	color5T = TestCube[0][2][1].color5;
+		//	color6T = TestCube[0][2][2].color5;
+		//
+		//	color7T = TestCube[0][0][2].color3; //Червоний 
+		//	color8T = TestCube[0][1][2].color3;
+		//	color9T = TestCube[0][2][2].color3;
+		//
+		//	color10T = TestCube[0][0][0].color4; //Зелений 
+		//	color11T = TestCube[0][0][1].color4;
+		//	color12T = TestCube[0][0][2].color4;
+		//	/*1*/
+		//	/*TestCube[1][2][0].color5 = color1T; //Жовтий 
+		//	TestCube[1][2][1].color5 = color2T;
+		//	TestCube[1][2][2].color5 = color3T;
+		//
+		//	TestCube[1][2][2].color3 = color4T; //Білий 
+		//	TestCube[1][1][2].color3 = color5T;
+		//	TestCube[1][0][2].color3 = color6T;
+		//
+		//	TestCube[1][0][2].color4 = color9T; //Червоний 
+		//	TestCube[1][0][1].color4 = color8T;
+		//	TestCube[1][0][0].color4 = color7T;
+		//
+		//	TestCube[1][0][0].color6 = color12T; //Зелений 
+		//	TestCube[1][1][0].color6 = color11T;
+		//	TestCube[1][2][0].color6 = color10T;*/
+		//	/*3*/
+		//
+		//	/*TestCube[2][2][0].color5 = color1T; //Жовтий 
+		//	TestCube[2][2][1].color5 = color2T;
+		//	TestCube[2][2][2].color5 = color3T;
+		//
+		//	TestCube[2][2][2].color3 = color4T; //Білий 
+		//	TestCube[2][1][2].color3 = color5T;
+		//	TestCube[2][0][2].color3 = color6T;
+		//
+		//	TestCube[2][0][2].color4 = color9T; //Червоний 
+		//	TestCube[2][0][1].color4 = color8T;
+		//	TestCube[2][0][0].color4 = color7T;
+		//
+		//	TestCube[2][0][0].color6 = color12T; //Зелений  
+		//	TestCube[2][1][0].color6 = color11T;
+		//	TestCube[2][2][0].color6 = color10T;*/
+		//	/**/
+		//	/*TestCube[0][2][0].color5 = color1T; //Жовтий 
+		//	TestCube[0][2][1].color5 = color2T;
+		//	TestCube[0][2][2].color5 = color3T;
+		//
+		//	TestCube[0][2][2].color3 = color4T; //Білий 
+		//	TestCube[0][1][2].color3 = color5T;
+		//	TestCube[0][0][2].color3 = color6T;
+		//
+		//	TestCube[0][0][2].color4 = color9T; //Червоний 
+		//	TestCube[0][0][1].color4 = color8T;
+		//	TestCube[0][0][0].color4 = color7T;
+		//
+		//	TestCube[0][0][0].color6 = color12T; //Зелений  
+		//	TestCube[0][1][0].color6 = color11T;
+		//	TestCube[0][2][0].color6 = color10T;*/
+		//	/*2*/
+		//
+		//	TestCube[0][2][0].color5 = color9T;  //Червоний  
+		//	TestCube[0][2][1].color5 = color8T;
+		//	TestCube[0][2][2].color5 = color7T;
+		//
+		//	TestCube[0][2][2].color3 = color12T; //Зелений 
+		//	TestCube[0][1][2].color3 = color11T;
+		//	TestCube[0][0][2].color3 = color10T;
+		//
+		//	TestCube[0][0][2].color4 = color1T;  //Жовтий 
+		//	TestCube[0][0][1].color4 = color2T;
+		//	TestCube[0][0][0].color4 = color3T;
+		//
+		//	TestCube[0][0][0].color6 = color4T;   //Білий 
+		//	TestCube[0][1][0].color6 = color5T;
+		//	TestCube[0][2][0].color6 = color6T;
+		//	break; 
+		//}
+		//
+		//case GLUT_KEY_F3: { //Третій ряд <-
+		//	Turns += 1;
+		//	color1T = TestCube[2][0][0].color6; //Жовтий 
+		//	color2T = TestCube[2][1][0].color6;
+		//	color3T = TestCube[2][2][0].color6;
+		//
+		//	color4T = TestCube[2][2][0].color5; //Білий 
+		//	color5T = TestCube[2][2][1].color5;
+		//	color6T = TestCube[2][2][2].color5;
+		//
+		//	color7T = TestCube[2][0][2].color3; //Червоний 
+		//	color8T = TestCube[2][1][2].color3;
+		//	color9T = TestCube[2][2][2].color3;
+		//
+		//	color10T = TestCube[2][0][0].color4; //Зелений 
+		//	color11T = TestCube[2][0][1].color4;
+		//	color12T = TestCube[2][0][2].color4;
+		//
+		//	TestCube[2][2][0].color5 = color1T; //Жовтий 
+		//	TestCube[2][2][1].color5 = color2T;
+		//	TestCube[2][2][2].color5 = color3T;
+		//
+		//	TestCube[2][2][2].color3 = color4T; //Білий 
+		//	TestCube[2][1][2].color3 = color5T;
+		//	TestCube[2][0][2].color3 = color6T;
+		//
+		//	TestCube[2][0][2].color4 = color9T; //Червоний 
+		//	TestCube[2][0][1].color4 = color8T;
+		//	TestCube[2][0][0].color4 = color7T;
+		//
+		//	TestCube[2][0][0].color6 = color12T; //Зелений  
+		//	TestCube[2][1][0].color6 = color11T;
+		//	TestCube[2][2][0].color6 = color10T;
+		//	break; 
+		//}
+		//
+		//case GLUT_KEY_F4: { //Перший стовпчик ^
+		//	Turns += 1;
+		//	color1T = TestCube[1][2][2].color3; //Червоний 
+		//	color2T = TestCube[0][2][2].color3;
+		//	color3T = TestCube[2][2][2].color3;
+		//
+		//	color4T = TestCube[2][2][0].color1; //Чорний 
+		//	color5T = TestCube[2][2][1].color1;
+		//	color6T = TestCube[2][2][2].color1;
+		//
+		//	color7T = TestCube[1][2][0].color6; //Жовтий 
+		//	color8T = TestCube[0][2][0].color6;
+		//	color9T = TestCube[2][2][0].color6;
+		//
+		//	color10T = TestCube[1][2][0].color2; //Синій  
+		//	color11T = TestCube[1][2][1].color2;
+		//	color12T = TestCube[1][2][2].color2;
+		//
+		//	TestCube[1][2][2].color3 = color10T; //Синій
+		//	TestCube[0][2][2].color3 = color11T;
+		//	TestCube[2][2][2].color3 = color12T;
+		//
+		//	TestCube[2][2][0].color1 = color3T;	 //Червоний 
+		//	TestCube[2][2][1].color1 = color2T;
+		//	TestCube[2][2][2].color1 = color1T;
+		//
+		//	TestCube[1][2][0].color6 = color4T;	 //Чорний 
+		//	TestCube[0][2][0].color6 = color5T;
+		//	TestCube[2][2][0].color6 = color6T;
+		//
+		//	TestCube[1][2][2].color2 = color7T;	  //Жовтий  
+		//	TestCube[1][2][1].color2 = color8T;
+		//	TestCube[1][2][0].color2 = color9T;
+		//	break; 
+		//}
+		//
+		//case GLUT_KEY_F5: { //Другий стовпчик ^
+		//	Turns += 1;
+		//	color1T = TestCube[1][1][2].color3; //Червоний 
+		//	color2T = TestCube[0][1][2].color3;
+		//	color3T = TestCube[2][1][2].color3;
+		//
+		//	color4T = TestCube[2][1][0].color1; //Чорний 
+		//	color5T = TestCube[2][1][1].color1;
+		//	color6T = TestCube[2][1][2].color1;
+		//
+		//	color7T = TestCube[1][1][0].color6; //Жовтий 
+		//	color8T = TestCube[0][1][0].color6;
+		//	color9T = TestCube[2][1][0].color6;
+		//
+		//	color10T = TestCube[1][1][0].color2; //Синій  
+		//	color11T = TestCube[1][1][1].color2;
+		//	color12T = TestCube[1][1][2].color2;
+		//
+		//	/*TestCube[1][2][2].color3 = color10T; //Синій
+		//	TestCube[0][2][2].color3 = color11T;
+		//	TestCube[2][2][2].color3 = color12T;
+		//
+		//	TestCube[2][2][0].color1 = color3T;	 //Червоний 
+		//	TestCube[2][2][1].color1 = color2T;
+		//	TestCube[2][2][2].color1 = color1T;
+		//
+		//	TestCube[1][2][0].color6 = color4T;	 //Чорний 
+		//	TestCube[0][2][0].color6 = color5T;
+		//	TestCube[2][2][0].color6 = color6T;
+		//
+		//	TestCube[1][2][2].color2 = color7T;	  //Жовтий  
+		//	TestCube[1][2][1].color2 = color8T;
+		//	TestCube[1][2][0].color2 = color9T;
+		//
+		//	TestCube[1][0][2].color3 = color10T; //Синій
+		//	TestCube[0][0][2].color3 = color11T;
+		//	TestCube[2][0][2].color3 = color12T;
+		//
+		//	TestCube[2][0][0].color1 = color3T;	 //Червоний 
+		//	TestCube[2][0][1].color1 = color2T;
+		//	TestCube[2][0][2].color1 = color1T;
+		//
+		//	TestCube[1][0][0].color6 = color4T;  //Чорний 
+		//	TestCube[0][0][0].color6 = color5T;
+		//	TestCube[2][0][0].color6 = color6T;
+		//
+		//	TestCube[1][0][2].color2 = color7T;	  //Жовтий 
+		//	TestCube[1][0][1].color2 = color8T;
+		//	TestCube[1][0][0].color2 = color9T;*/
+		//	/*Новий*/
+		//	/*color1T = TestCube[2][0][0].color6; //Жовтий 
+		//	color2T = TestCube[2][1][0].color6;
+		//	color3T = TestCube[2][2][0].color6;
+		//
+		//	color4T = TestCube[2][2][0].color5; //Білий 
+		//	color5T = TestCube[2][2][1].color5;
+		//	color6T = TestCube[2][2][2].color5;
+		//
+		//	color7T = TestCube[2][0][2].color3; //Червоний 
+		//	color8T = TestCube[2][1][2].color3;
+		//	color9T = TestCube[2][2][2].color3;
+		//
+		//	color10T = TestCube[2][0][0].color4; //Зелений 
+		//	color11T = TestCube[2][0][1].color4;
+		//	color12T = TestCube[2][0][2].color4;
+		//
+		//	TestCube[2][2][0].color5 = color9T;  //Червоний
+		//	TestCube[2][2][1].color5 = color8T;
+		//	TestCube[2][2][2].color5 = color7T;
+		//
+		//	TestCube[2][2][2].color3 = color12T; //Зелений 
+		//	TestCube[2][1][2].color3 = color11T;
+		//	TestCube[2][0][2].color3 = color10T;
+		//
+		//	TestCube[2][0][2].color4 = color1T;  //Жовтий 
+		//	TestCube[2][0][1].color4 = color2T;
+		//	TestCube[2][0][0].color4 = color3T;
+		//
+		//	TestCube[2][0][0].color6 = color4T;   //Білий 
+		//	TestCube[2][1][0].color6 = color5T;
+		//	TestCube[2][2][0].color6 = color6T;*/
+		//	TestCube[1][1][2].color3 = color10T; //Синій
+		//	TestCube[0][1][2].color3 = color11T;
+		//	TestCube[2][1][2].color3 = color12T;
+		//
+		//	TestCube[2][1][0].color1 = color3T;	 //Червоний 
+		//	TestCube[2][1][1].color1 = color2T;
+		//	TestCube[2][1][2].color1 = color1T;
+		//
+		//	TestCube[1][1][0].color6 = color4T;  //Чорний 
+		//	TestCube[0][1][0].color6 = color5T;
+		//	TestCube[2][1][0].color6 = color6T;
+		//
+		//	TestCube[1][1][2].color2 = color7T;	  //Жовтий 
+		//	TestCube[1][1][1].color2 = color8T;
+		//	TestCube[1][1][0].color2 = color9T;
+		//	break; 
+		//}
+		//
+		//case GLUT_KEY_F6: { //Третій стовпчик ^
+		//	Turns += 1;
+		//	color1T = TestCube[1][0][2].color3; //Червоний 
+		//	color2T = TestCube[0][0][2].color3;
+		//	color3T = TestCube[2][0][2].color3;
+		//
+		//	color4T = TestCube[2][0][0].color1; //Чорний 
+		//	color5T = TestCube[2][0][1].color1;
+		//	color6T = TestCube[2][0][2].color1;
+		//
+		//	color7T = TestCube[1][0][0].color6; //Жовтий 
+		//	color8T = TestCube[0][0][0].color6;
+		//	color9T = TestCube[2][0][0].color6;
+		//
+		//	color10T = TestCube[1][0][0].color2; //Синій  
+		//	color11T = TestCube[1][0][1].color2;
+		//	color12T = TestCube[1][0][2].color2;
+		//
+		//	TestCube[1][0][2].color3 = color10T; //Синій
+		//	TestCube[0][0][2].color3 = color11T;
+		//	TestCube[2][0][2].color3 = color12T;
+		//
+		//	TestCube[2][0][0].color1 = color3T;	 //Червоний 
+		//	TestCube[2][0][1].color1 = color2T;
+		//	TestCube[2][0][2].color1 = color1T;
+		//
+		//	TestCube[1][0][0].color6 = color4T;  //Чорний 
+		//	TestCube[0][0][0].color6 = color5T;
+		//	TestCube[2][0][0].color6 = color6T;
+		//
+		//	TestCube[1][0][2].color2 = color7T;	  //Жовтий 
+		//	TestCube[1][0][1].color2 = color8T;
+		//	TestCube[1][0][0].color2 = color9T;
+		//	break; 
+		//}
+		//
+		///*case GLUT_KEY_F7: { //Третій стовпчик ^
+		//	Turns += 1;
+		//	color1T = TestCube[1][0][2].color3; //Червоний 
+		//	color2T = TestCube[0][0][2].color3;
+		//	color3T = TestCube[2][0][2].color3;
+		//
+		//	color4T = TestCube[2][0][0].color1; //Чорний 
+		//	color5T = TestCube[2][0][1].color1;
+		//	color6T = TestCube[2][0][2].color1;
+		//
+		//	color7T = TestCube[1][0][0].color6; //Жовтий 
+		//	color8T = TestCube[0][0][0].color6;
+		//	color9T = TestCube[2][0][0].color6;
+		//
+		//	color10T = TestCube[1][0][0].color2; //Синій  
+		//	color11T = TestCube[1][0][1].color2;
+		//	color12T = TestCube[1][0][2].color2;
+		//
+		//	TestCube[1][0][2].color3 = color6T;  //Чорний
+		//	TestCube[0][0][2].color3 = color5T;
+		//	TestCube[2][0][2].color3 = color4T;
+		//
+		//	TestCube[2][0][0].color1 = color7T;	 //Жовтий 
+		//	TestCube[2][0][1].color1 = color8T;
+		//	TestCube[2][0][2].color1 = color9T;
+		//
+		//	TestCube[1][0][0].color6 = color12T; //Синій 
+		//	TestCube[0][0][0].color6 = color11T;
+		//	TestCube[2][0][0].color6 = color10T;
+		//
+		//	TestCube[1][0][2].color2 = color3T;	  //Червоний  
+		//	TestCube[1][0][1].color2 = color2T; 
+		//	TestCube[1][0][0].color2 = color1T;
+		//	break; 
+		//}
+		//
+		//case GLUT_KEY_F8: { //Перший стовпчик _
+		//	Turns += 1;
+		//	color1T = TestCube[1][0][2].color3; //Червоний 
+		//	color2T = TestCube[0][0][2].color3;
+		//	color3T = TestCube[2][0][2].color3;
+		//
+		//	color4T = TestCube[2][0][0].color1; //Чорний 
+		//	color5T = TestCube[2][0][1].color1;
+		//	color6T = TestCube[2][0][2].color1;
+		//
+		//	color7T = TestCube[1][0][0].color6; //Жовтий 
+		//	color8T = TestCube[0][0][0].color6;
+		//	color9T = TestCube[2][0][0].color6;
+		//
+		//	color10T = TestCube[1][0][0].color2; //Синій  
+		//	color11T = TestCube[1][0][1].color2;
+		//	color12T = TestCube[1][0][2].color2;
+		//
+		//	TestCube[1][2][2].color3 = color6T;  //Чорний
+		//	TestCube[0][2][2].color3 = color5T;
+		//	TestCube[2][2][2].color3 = color4T;
+		//
+		//	TestCube[2][2][0].color1 = color7T;	 //Жовтий 
+		//	TestCube[2][2][1].color1 = color8T;
+		//	TestCube[2][2][2].color1 = color9T;
+		//
+		//	TestCube[1][2][0].color6 = color12T; //Синій 
+		//	TestCube[0][2][0].color6 = color11T;
+		//	TestCube[2][2][0].color6 = color10T;
+		//
+		//	TestCube[1][2][2].color2 = color3T;	  //Червоний  
+		//	TestCube[1][2][1].color2 = color2T; 
+		//	TestCube[1][2][0].color2 = color1T;
+		//	break; 
+		//}*/
+	}
+}
+
+void idle(void) {
+	glutPostRedisplay();
+}
+
+
+int main(int argc, char** argv) {
+	glutInit(&argc, argv);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
+	glutInitWindowSize(750, 750);
+	glutInitWindowPosition(180, 40);
+	glutCreateWindow("Cube");
+
+	glewInit();
+	if (!glewIsSupported("GL_VERSION_2_0")) {
+		fprintf(stderr, "GL 2.0 unsupported\n");
+		return 1;
+	}
+
+	init();
+
+	MySphereSkyBox = gluNewQuadric();
+
+	//shaderUtil.load("vertex.shader", "fragment.shader");
+	shaderUtil.load();
+
+	glutDisplayFunc(display);
+	glutSpecialFunc(handleKeys);
+	glutMouseFunc(mouseButton);
+	glutMotionFunc(mouseMove);
+	glutIdleFunc(idle);
+
+	std::cout << "Init" << std::endl;
+	//shaderUtil.init();
+
+	glutMainLoop();
+
+	std::cout << "Exit" << std::endl;
+	shaderUtil.destroy();
+	return 0;
+}

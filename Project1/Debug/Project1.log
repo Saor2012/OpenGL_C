@@ -1,0 +1,6 @@
+﻿  Source.cpp
+C:\Users\DayDreamer\Desktop\Учёба\AMC\Cube\Project1\Project1\Source.cpp(117,11): warning C4244: =: преобразование "double" в "float", возможна потеря данных
+C:\Users\DayDreamer\Desktop\Учёба\AMC\Cube\Project1\Project1\Source.cpp(118,8): warning C4244: =: преобразование "double" в "float", возможна потеря данных
+C:\Users\DayDreamer\Desktop\Учёба\AMC\Cube\Project1\Project1\Source.cpp(122,11): warning C4244: =: преобразование "double" в "float", возможна потеря данных
+C:\Users\DayDreamer\Desktop\Учёба\AMC\Cube\Project1\Project1\Source.cpp(123,8): warning C4244: =: преобразование "double" в "float", возможна потеря данных
+  Project1.vcxproj -> C:\Users\DayDreamer\Desktop\Учёба\AMC\Cube\Project1\Debug\Project1.exe
